@@ -1,331 +1,91 @@
-import React, { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
-import {
-  Trophy,
-  Users,
-  User,
-  Phone,
-  Mail,
-  ExternalLink,
-  FileText,
-  Edit,
-  School,
-  AlertCircle,
-  CheckCircle,
-  Download,
-} from 'lucide-react';
-import { collection, getDocs, query, where, orderBy, doc, updateDoc, getDoc } from 'firebase/firestore';
-import { db } from '../../lib/firebase';
-import { sendWorkshopInvite, sendPhase2Selection } from '../../lib/emailService';
+import React, { useState, useEffect } from "react";
+import { motion } from "framer-motion";
 
-interface AdminDashboardProps {
-  isFinanceAdmin: boolean;
-}
+const CountdownTimer = () => {
+  const targetDate = new Date("2025-03-20T23:00:00").getTime();
+  const [timeLeft, setTimeLeft] = useState(() => calculateTimeLeft());
 
-const AdminDashboard: React.FC<AdminDashboardProps> = ({ isFinanceAdmin }) => {
-  const [submissions, setSubmissions] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
-  const [publishing, setPublishing] = useState(false);
-  const [editingScore, setEditingScore] = useState<string | null>(null);
-  const [scoreData, setScoreData] = useState({
-    points: 0,
-    review: ''
-  });
+  function calculateTimeLeft() {
+    const now = new Date().getTime();
+    const difference = targetDate - now;
 
-  useEffect(() => {
-    fetchData();
-  }, []);
-
-  const fetchData = async () => {
-    try {
-      setLoading(true);
-      const submissionsQuery = query(collection(db, 'phase1_submissions'));
-      const snapshot = await getDocs(submissionsQuery);
-      const submissionsData = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-      setSubmissions(submissionsData);
-    } catch (error) {
-      console.error('Error fetching data:', error);
-      setError('Failed to fetch submissions');
-    } finally {
-      setLoading(false);
+    if (difference <= 0) {
+      return { days: 0, hours: 0, minutes: 0, seconds: 0 };
     }
-  };
 
-  const handleScoreSubmit = async (submissionId: string) => {
-    try {
-      setLoading(true);
-      
-      await updateDoc(doc(db, 'phase1_submissions', submissionId), {
-        points: scoreData.points,
-        review: scoreData.review,
-        reviewedAt: new Date().toISOString()
-      });
-
-      setEditingScore(null);
-      setScoreData({ points: 0, review: '' });
-      
-      fetchData();
-      setSuccess('Score updated successfully');
-    } catch (error) {
-      console.error('Error updating score:', error);
-      setError('Failed to update score');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const publishResults = async () => {
-    try {
-      setPublishing(true);
-      
-      // Check if all submissions are scored
-      const unscored = submissions.filter(sub => sub.points === undefined);
-      if (unscored.length > 0) {
-        throw new Error('All submissions must be scored before publishing results');
-      }
-
-      // Create the phase1Results document if it doesn't exist
-      const configRef = doc(db, 'config', 'phase1Results');
-      const configDoc = await getDoc(configRef);
-
-      if (!configDoc.exists()) {
-        await updateDoc(configRef, {
-          published: true,
-          publishedAt: new Date().toISOString()
-        });
-      } else {
-        await updateDoc(configRef, {
-          published: true,
-          publishedAt: new Date().toISOString()
-        });
-      }
-
-      setSuccess('Results published successfully!');
-    } catch (error: any) {
-      console.error('Error publishing results:', error);
-      setError(error.message || 'Failed to publish results');
-    } finally {
-      setPublishing(false);
-    }
-  };
-
-  if (loading) {
-    return (
-      <div className="flex justify-center py-12">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-purple-500"></div>
-      </div>
-    );
+    return {
+      days: Math.floor(difference / (1000 * 60 * 60 * 24)),
+      hours: Math.floor((difference % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)),
+      minutes: Math.floor((difference % (1000 * 60 * 60)) / (1000 * 60)),
+      seconds: Math.floor((difference % (1000 * 60)) / 1000),
+    };
   }
 
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setTimeLeft(calculateTimeLeft());
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, []);
+
+  const timeUnits = [
+    { label: "Days", value: timeLeft.days },
+    { label: "Hours", value: timeLeft.hours },
+    { label: "Minutes", value: timeLeft.minutes },
+    { label: "Seconds", value: timeLeft.seconds },
+  ];
+
+  const isCountdownOver =
+    timeLeft.days === 0 &&
+    timeLeft.hours === 0 &&
+    timeLeft.minutes === 0 &&
+    timeLeft.seconds === 0;
+
   return (
-    <div className="p-6">
-      <div className="max-w-7xl mx-auto">
-        <h2 className="text-2xl font-bold gradient-text mb-6">
-          {isFinanceAdmin ? 'Finance Dashboard' : 'Admin Dashboard'}
-        </h2>
-
-        {error && (
-          <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="mb-6 p-4 bg-red-500/10 text-red-400 rounded-lg flex items-center"
-          >
-            <AlertCircle className="w-5 h-5 mr-2" />
-            {error}
-          </motion.div>
-        )}
-
-        {success && (
-          <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="mb-6 p-4 bg-green-500/10 text-green-400 rounded-lg flex items-center"
-          >
-            <CheckCircle className="w-5 h-5 mr-2" />
-            {success}
-          </motion.div>
-        )}
-
-        {/* Publish Results Button */}
-        <div className="flex justify-end mb-8">
-          <motion.button
-            onClick={publishResults}
-            disabled={publishing}
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            className="px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 rounded-lg text-white flex items-center"
-          >
-            {publishing ? (
-              <>
-                <div className="animate-spin rounded-full h-5 w-5 border-t-2 border-b-2 border-white mr-2" />
-                Publishing...
-              </>
-            ) : (
-              <>
-                <Trophy className="w-5 h-5 mr-2" />
-                Publish Results
-              </>
-            )}
-          </motion.button>
-        </div>
-
-        {/* Submissions List */}
-        <div className="grid gap-6">
-          {submissions.length === 0 ? (
-            <div className="text-center py-12 text-gray-400">
-              No submissions yet.
-            </div>
-          ) : (
-            submissions.map((submission) => (
+    <div className="mb-12 text-center">
+      {isCountdownOver ? (
+        <motion.div
+          initial={{ opacity: 0, scale: 0.8 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.8 }}
+          className="flex flex-col items-center"
+        >
+          <h3 className="text-2xl font-bold text-red-500 mb-4">
+            OH OH! REGISTRATION CLOSED
+          </h3>
+          <p className="text-lg text-gray-300">See you in 2026!</p>
+          <img
+            src="https://media.tenor.com/Kjs1TtCLkVoAAAAM/open-closed.gif"
+            alt="Registration Closed"
+            className="w-64 h-64 mt-4 rounded-lg shadow-lg"
+          />
+        </motion.div>
+      ) : (
+        <>
+          <h3 className="text-xl text-purple-300 mb-6">Registration Ends In:</h3>
+          <div className="flex flex-wrap justify-center gap-4">
+            {timeUnits.map((unit, index) => (
               <motion.div
-                key={submission.id}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="bg-gradient-to-br from-purple-900/30 to-blue-900/30 backdrop-blur-xl rounded-xl p-6"
+                key={unit.label}
+                initial={{ scale: 0.5, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                transition={{ delay: index * 0.1 }}
+                className="flex flex-col items-center"
               >
-                <div className="grid md:grid-cols-2 gap-6">
-                  <div>
-                    <h3 className="text-xl font-semibold text-white mb-2">{submission.teamName}</h3>
-                    <div className="space-y-2 text-gray-300">
-                      <p className="flex items-center">
-                        <User className="w-5 h-5 mr-2" />
-                        Team Lead: {submission.teamLeadName}
-                      </p>
-                      <p className="flex items-center">
-                        <School className="w-5 h-5 mr-2" />
-                        College: {submission.collegeName}
-                      </p>
-                      <p className="flex items-center">
-                        <Phone className="w-5 h-5 mr-2" />
-                        WhatsApp: {submission.whatsappNumber}
-                      </p>
-                      <p className="text-purple-400">
-                        Registration ID: {submission.registrationId}
-                      </p>
-                      <p className="text-gray-400">
-                        Submitted: {new Date(submission.submittedAt).toLocaleString()}
-                      </p>
-                    </div>
+                <div className="bg-white/10 backdrop-blur-lg rounded-lg p-4 w-20 sm:w-24 hover:bg-white/20 transition-colors duration-300">
+                  <div className="text-2xl sm:text-3xl font-bold text-white">
+                    {String(unit.value).padStart(2, "0")}
                   </div>
-                  <div>
-                    <h4 className="text-lg font-semibold text-white mb-2">Project Details</h4>
-                    <p className="text-gray-300 mb-2">{submission.productDescription}</p>
-                    <p className="text-gray-300 mb-4">{submission.solution}</p>
-                    <div className="flex space-x-4">
-                      {submission.fileUrl && (
-                        <a
-                          href={submission.fileUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-blue-400 hover:text-blue-300 flex items-center"
-                        >
-                          <FileText className="w-5 h-5 mr-2" />
-                          View Document
-                        </a>
-                      )}
-                      {submission.youtubeLink && (
-                        <a
-                          href={submission.youtubeLink}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-red-400 hover:text-red-300 flex items-center"
-                        >
-                          <ExternalLink className="w-5 h-5 mr-2" />
-                          Watch Video
-                        </a>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Scoring Section */}
-                <div className="mt-6 pt-6 border-t border-purple-500/20">
-                  {editingScore === submission.id ? (
-                    <div className="space-y-4">
-                      <div>
-                        <label className="block text-gray-300 mb-2">Score (0-100)</label>
-                        <input
-                          type="number"
-                          min="0"
-                          max="100"
-                          value={scoreData.points}
-                          onChange={(e) => setScoreData({ ...scoreData, points: parseInt(e.target.value) })}
-                          className="w-full px-4 py-2 bg-white/5 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none text-white"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-gray-300 mb-2">Review Comments</label>
-                        <textarea
-                          value={scoreData.review}
-                          onChange={(e) => setScoreData({ ...scoreData, review: e.target.value })}
-                          className="w-full px-4 py-2 bg-white/5 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none text-white"
-                          rows={4}
-                        />
-                      </div>
-                      <div className="flex justify-end space-x-4">
-                        <button
-                          onClick={() => setEditingScore(null)}
-                          className="px-4 py-2 bg-gray-700 text-white rounded-lg"
-                        >
-                          Cancel
-                        </button>
-                        <button
-                          onClick={() => handleScoreSubmit(submission.id)}
-                          className="px-4 py-2 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-lg"
-                        >
-                          Save Score
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="flex items-center justify-between">
-                      <div>
-                        {submission.points !== undefined ? (
-                          <div className="space-y-2">
-                            <p className="text-lg">
-                              <span className="text-gray-300">Score: </span>
-                              <span className="text-purple-400 font-bold">{submission.points}/100</span>
-                            </p>
-                            <p className="text-gray-300">
-                              <span className="font-semibold">Review: </span>
-                              {submission.review}
-                            </p>
-                            <p className="text-gray-400 text-sm">
-                              Reviewed: {submission.reviewedAt ? new Date(submission.reviewedAt).toLocaleString() : 'Not reviewed'}
-                            </p>
-                          </div>
-                        ) : (
-                          <p className="text-gray-400">Not scored yet</p>
-                        )}
-                      </div>
-                      <button
-                        onClick={() => {
-                          setEditingScore(submission.id);
-                          setScoreData({
-                            points: submission.points || 0,
-                            review: submission.review || ''
-                          });
-                        }}
-                        className="px-4 py-2 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-lg flex items-center"
-                      >
-                        <Edit className="w-4 h-4 mr-2" />
-                        {submission.points !== undefined ? 'Edit Score' : 'Add Score'}
-                      </button>
-                    </div>
-                  )}
+                  <div className="text-sm text-purple-300">{unit.label}</div>
                 </div>
               </motion.div>
-            ))
-          )}
-        </div>
-      </div>
+            ))}
+          </div>
+        </>
+      )}
     </div>
   );
 };
 
-export default AdminDashboard;
+export default CountdownTimer;
